@@ -30,7 +30,7 @@ from litellm.secret_managers.main import str_to_bool
 from litellm.types.integrations.langfuse_otel import (
     LangfuseSpanAttributes,
 )
-from litellm.types.utils import StandardCallbackDynamicParams
+from litellm.types.utils import StandardCallbackDynamicParams, TranscriptionResponse
 
 if TYPE_CHECKING:
     from opentelemetry.trace import Span as _Span
@@ -247,7 +247,11 @@ class LangfuseOtelLogger(OpenTelemetry):
     def _observation_output(response_obj: _Gettable | None) -> str | None:
         if not response_obj or not hasattr(response_obj, "get"):
             return None
-        return _extract_output_items(response_obj) or _extract_choices_output(response_obj)
+        return (
+            _extract_output_items(response_obj)
+            or _extract_choices_output(response_obj)
+            or _extract_transcription_output(response_obj)
+        )
 
     @staticmethod
     def _trace_tags(kwargs: Mapping[str, object], metadata: Mapping[str, object]) -> tuple[str, ...]:
@@ -645,6 +649,12 @@ def _tool_call_arguments(arguments: object) -> object:
         return json.loads(arguments)
     except json.JSONDecodeError:
         return {}
+
+
+def _extract_transcription_output(response_obj: _Gettable) -> str | None:
+    if not isinstance(response_obj, TranscriptionResponse) or not response_obj.text:
+        return None
+    return safe_dumps({"role": "assistant", "content": response_obj.text})
 
 
 def _extract_output_items(response_obj: _Gettable) -> str | None:
